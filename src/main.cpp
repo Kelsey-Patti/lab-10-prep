@@ -19,6 +19,7 @@ int main() {
     settings.majorVersion = 2;
     settings.minorVersion = 1;
     sf::RenderWindow window(sf::VideoMode({1280, 720}), "Shaders", sf::State::Windowed, settings);
+    
     // Query the settings we actually received (may be different):
     const auto& actualSettings = window.getSettings();
     std::cout << "OpenGL version " << actualSettings.majorVersion << "."
@@ -33,8 +34,18 @@ int main() {
     fullscreenTriangle[2].texCoords = {0, 2};
     // load vertex and fragment shaders:
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
+    shader.setUniform("WINDOW_WIDTH", static_cast<float>(window.getSize().x));
+    shader.setUniform("WINDOW_HEIGHT", static_cast<float>(window.getSize().y));
     // TODO: eventually add another Shader here which uses the blur fragment shader,
     // also create a sf::RenderTexture...
+    sf::Shader blurShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"blur.frag"});
+    sf::RenderTexture renderTexture({1280, 720});
+    blurShader.setUniform("WINDOW_WIDTH", static_cast<float>(window.getSize().x));
+    blurShader.setUniform("WINDOW_HEIGHT", static_cast<float>(window.getSize().y));
+    blurShader.setUniform("texture", renderTexture.getTexture());
+
+    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+    auto start = std::chrono::steady_clock::now();
     while (window.isOpen()) {
         while (auto e = window.pollEvent()) {
             if (e->is<sf::Event::Closed>()) {
@@ -43,8 +54,20 @@ int main() {
         }
         // TODO: set shader uniforms and eventually draw into
         // a RenderTexture first before postprocessing into the window target.
+        auto now = std::chrono::steady_clock::now();
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now-start).count();
+        
+        shader.setUniform("time", static_cast<float>(elapsed));
+        
+
+        mousePos = sf::Mouse::getPosition(window);
+        shader.setUniform("mousePos", sf::Vector2f{static_cast<float>(mousePos.x), static_cast<float>(window.getSize().y-mousePos.y)});
+
+        renderTexture.clear(sf::Color::Black);
+        renderTexture.draw(fullscreenTriangle, &shader);
+        renderTexture.display();
         window.clear(sf::Color::Black);
-        window.draw(fullscreenTriangle, &shader);
+        window.draw(fullscreenTriangle, &blurShader);
         window.display();
     }
     return 0;
